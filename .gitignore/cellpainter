@@ -1,0 +1,216 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Jun 12 06:14:36 2018
+generate piff file off of binary image
+@author: Thomas
+"""
+import os
+import numpy as np
+import csv
+import pandas as pd
+import matplotlib
+import statistics as stat
+import csv
+import random
+import matplotlib.pyplot as plt
+import matplotlib.image as im
+import scipy
+import skimage
+from PIL import Image
+from skimage.morphology import disk,dilation,erosion
+from skimage.filters import sobel
+from skimage.util import invert
+from skimage.io import imread
+
+plt.close('all')
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
+###
+#
+#
+# so this class takes in a binary png file and then writes cells wherever its one
+# dataflow: load image witk scikit image > use one of the functions to return a binary numpy array of where to write,
+# then use write_singletype and write_multitype to write cells.
+# put this pif in the simulation folder 
+# simulation folder
+# ---- whatever_name.cc3d
+#----- Simulation Folder
+#----- PUT YO PIF HERE MY FRIEND
+
+class cellpainter:
+    def __init__(self):
+        print('W R I T E    Y O U R   O W N    L I F E ')
+        #writing scheme: pass a vector [x,y,z,type,cellnum]
+        self.impath = ''
+        self.piffpath= ''
+        self.groupcount = 0
+        
+    def __getattribute__(self,key):
+        return object.__getattribute__(self,key)
+        
+    def __setattribute__(self,key,value):
+        self.key = value
+        
+    def setIMGpath(self,path):
+        self.impath = path
+      
+    def inbounds(self,i,j):
+      if i >=0 and i+1 < self.ylim:
+          if j >=0 and j+1< self.xlim:
+              return True
+          return False
+        
+    def setPIFFpath(self,path):
+        self.piffpath = path
+        
+    def readimage(self,path):        
+        img = Image.open(path)
+        arr = np.array(img)
+        arr = np.sum(arr, axis = 2) #sum the image to grayscale
+        return arr #returns numpy array
+        
+    def setlims(self,x,y):
+        self.xlim= x
+        self.ylim = y
+        
+    def clearpiff(self):
+        with open(self.piffpath,'w') as csvfile:
+            csvfile.close()            
+    
+    def getneighbors(self,i,j):
+        return([[i-1,j],[i-1,j+1],[i-1,j-1],[i,j],[i,j+1],[i,j-1],[i+1,j],[i+1,j-1],[i+1,j+1]])
+    
+    def dist(self,i1,i2,j1,j2):
+        return(abs(i1-i2)**2 + abs(j1-j2)**2)**.5
+    
+    def genperimeterimg(self): #generates wall
+        filename = self.impath
+        #dil_rad = 4
+        #erode_rad = 2
+        #selem =  disk(2)
+        #dil =   dilation(img,selem)
+        #selem=   disk(erode_rad)
+        #img  =   erosion(img,selem)
+        img = Image.open(filename)
+        arr = np.array(img)
+        arr = np.sum(arr, axis = 2)
+        img  =   sobel(arr) 
+        bi   =   img > 0
+        return bi
+    
+    def whereisone(self,bi):
+        pts = []
+        it = np.nditer(bi, flags=['multi_index'])
+        while not it.finished:
+            i = it.multi_index[0]
+            j = it.multi_index[1]
+            z = 0
+            if bi[i,j] == 1:
+                pts.append([i,j])
+            it.iternext()
+        return pts
+    
+    def write_one_type(self,bi,ct,gn):
+            #bi is the image, binary: 1 for write here
+            #ct cell type
+            #gn is 
+        wherept = []
+        lines_to_add =[]
+        it = np.nditer(bi, flags=['multi_index'])
+        with open(self.piffpath, 'a') as f:
+            while not it.finished:
+                i = it.multi_index[0]
+                j = it.multi_index[1]
+                z = 0
+                if bi[i,j] == 1:
+                    d = '    '
+                    end= '\n'
+                    if sself.inbounds(i,j):
+                        f.write(str(gn)+d+ct+d+str(j)+d+str(j+1)+d+str(i)+d+str(i+1)+d+'0'+d+'0'+end)
+                it.iternext()
+            f.close()
+            self.groupcount = self.groupcount+1
+            
+    def writecells(self,ptlis,ct,gn):
+        with open(self.piffpath, 'a') as f:
+            for pt in ptlis:
+                j = pt[1]
+                i = self.ylim - pt[0]
+                d = '    '
+                end= '\n'
+                if self.inbounds(i,j):
+                    f.write(str(gn)+d+str(ct)+d+str(j)+d+str(j+1)+d+str(i)+d+str(i+1)+d+'0'+d+'0'+end)
+            f.close()
+            self.groupcount = self.groupcount+1
+            
+    def pix_circ(self,cent,rad,thicc): 
+    # this creates a annulus of cricle of radis rad, thickness thicc,
+    #cenered at cent which is a 2-long 1d vector
+        xc = cent[1]
+        yc = cent[0]
+        t = thicc
+        r = rad
+        pts =[]
+        for ii in range(self.ylim):
+            for jj in range(self.xlim):
+                if self.dist(ii,yc,jj,xc) > r-t and self.dist(ii,yc,jj,xc) < r+t:
+                    pts.append([ii,jj])
+        return pts
+    
+
+                   
+    
+    def write_circ(self,typelist,cellsize,center,rad,thick):
+        pts = self.pix_circ(center,rad,thick)
+        self.write_multitype(pts,typelist,cellsize)
+        
+    def write_multitype(self,ptlist,typelist,cellsize):
+        pt = ptlist
+        groups = []
+        grouptype = []
+        while pt != []:
+            cell = []
+            grouptype.append(np.random.choice(typelist))
+            count = 0
+            seed = pt[np.random.choice(range(0,len(pt)))]
+            print(len(pt))
+            while count < cellsize:
+                i = seed[0]
+                j = seed[1]
+                justadded = []
+                nei = self.getneighbors(i,j)
+                added = 0
+                for n in nei:
+                    if n in pt:
+                        cell.append(n)
+                        justadded.append(n)
+                        pt.remove(n)
+                        count = count+1
+                        added = 1
+                if justadded != []:
+                    seed = justadded[np.random.choice(range(0,len(justadded)))]
+                elif pt != []:
+                    seed = pt[np.random.choice(range(0,len(pt)))]
+                else:
+                    break
+            groups.append(cell)
+            #cell,grouptype are elementwise corresponding
+        for n in range(0,len(groups)):
+            ct = grouptype[n]
+            gn = self.groupcount+1
+            self.writecells(groups[n],ct,gn)
+                
+    def startpiff(self,x,y):
+        with open(self.piffpath, 'a') as f:
+            #group_number type x0 x1 y0 y1 z0 z1
+            d = '    '
+            end= '\n'
+            f.write('0'+d+'Medium'+d+'0'+d+str(x-1)+d+'0'+d+str(y-1)+d+'0'+d+'0' +end)
+        f.close()
+        self.groupcount = self.groupcount+1
+        
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+
